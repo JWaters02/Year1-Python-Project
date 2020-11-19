@@ -117,7 +117,7 @@ class Parser:
         self.variables.add(name)
         return VariableSymbol(name)
 
-    # Ask what this does
+    # 
     def parse_expression(self):
         terms = []
         terms.append(self.parse_term())
@@ -127,7 +127,7 @@ class Parser:
             token = self.consume_token()
         return terms
 
-    # Ask what this does
+    # 
     def parse_term(self):
         terms = []
         terms.append(self.parse_term())
