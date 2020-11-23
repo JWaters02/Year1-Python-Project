@@ -14,23 +14,6 @@
 
 # ====================== 
 
-class Token:
-    # Provides alternatives to each operator with possible inputted mathematical symbols
-    TOKEN_ALTERNATIVES = {
-        '!' : '!',
-        'not' : '!',
-        '¬' : '!',
-        '-' : '!',
-        '+' : '+',
-        'or' : '+',
-        '|' : '+',
-        'v' : '+',
-        '.' : '.',
-        'and' : '.',
-        '^' : '.',
-        '&' : '.'
-    }
-
 
 # Evalutates not symbols
 class NotExpression:
@@ -98,6 +81,15 @@ class Parser:
         self.text = text.replace(' ', '') # Removes whitespace
         self.pos = 0
         self.variables = set() # Tracks all the variables in the expression
+        self.NOT_ALTERNATIVES = [
+            '!', 'not', '¬', '-'
+        ]
+        self.OR_ALTERNATIVES = [
+            '+', 'or', '|', 'v'
+        ]
+        self.AND_ALTERNATIVES = [
+            '.', 'and', '^', '&'
+        ]
 
     # Reads the tokens of the expression by iterating through the position
     def consume_token(self):
@@ -136,7 +128,7 @@ class Parser:
         terms = []
         terms.append(self.parse_and())
         token = self.peek_token()
-        while token == "+":
+        while token in self.OR_ALTERNATIVES:
             token = self.consume_token()
             terms.append(self.parse_and())
             token = self.peek_token()
@@ -148,7 +140,7 @@ class Parser:
         terms = []
         terms.append(self.parse_symbol())
         token = self.peek_token()
-        while token == ".":
+        while token in self.AND_ALTERNATIVES:
             token = self.consume_token()
             terms.append(self.parse_symbol())
             token = self.peek_token()
@@ -175,7 +167,7 @@ class Parser:
         token = self.peek_token()
         if token == "(":
             return self.parse_parenthesized_symbol()
-        elif token == "!":
+        elif token in self.NOT_ALTERNATIVES:
             return self.parse_not()
         elif token == "1" or token == "0":
             return self.parse_literal()
@@ -185,7 +177,7 @@ class Parser:
     # Returns the not of the expression
     def parse_not(self):
         token = self.consume_token()
-        if not token == "!":
+        if not token in self.NOT_ALTERNATIVES:
             raise Exception('Invalid syntax')
         sub_symbol = self.parse_symbol()
         ret = NotExpression(sub_symbol)
@@ -213,7 +205,7 @@ class Parser:
         return ret
 
 
-parser = Parser(text="!(((A+B).C).0)")
+parser = Parser(text="-(((A or B)andC).0)")
 ast = parser.parse()
 # generate the context variables from parser.variables.
 # e.g. 
