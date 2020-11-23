@@ -147,18 +147,6 @@ class Parser:
         ret = AndExpression(terms)
         return ret
 
-    # Returns the expression within the parentheses
-    # Errors if either parentheses missing
-    def parse_parenthesized_symbol(self):
-        token = self.consume_token()
-        if not token == "(":
-            raise Exception('Missing (')
-        ret = ParenthesizedSymbol(self.parse_or())
-        token = self.consume_token()
-        if not token == ")":
-            raise Exception('Missing )')
-        return ret
-
     # If next pos is open bracket then parse parenthesis
     # If next pos is not then check if not
     # If next pos is literal then set true or false
@@ -181,6 +169,18 @@ class Parser:
             raise Exception('Invalid syntax')
         sub_symbol = self.parse_symbol()
         ret = NotExpression(sub_symbol)
+        return ret
+
+    # Returns the expression within the parentheses
+    # Errors if either parentheses missing
+    def parse_parenthesized_symbol(self):
+        token = self.consume_token()
+        if not token == "(":
+            raise Exception('Missing (')
+        ret = ParenthesizedSymbol(self.parse_or())
+        token = self.consume_token()
+        if not token == ")":
+            raise Exception('Missing )')
         return ret
 
     # Returns any variables in the expression/term
