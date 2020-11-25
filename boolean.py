@@ -1,4 +1,5 @@
-#import PrettyTable
+from prettytable import PrettyTable
+import itertools
 
 # ====================== 
 # Backus-Naur Form
@@ -205,7 +206,7 @@ class Parser:
         return ret
 
 
-parser = Parser(text="-(((A or B)andC).0)")
+parser = Parser(text="!(((A+B).C).0)")
 ast = parser.parse()
 # generate the context variables from parser.variables.
 # e.g. 
@@ -227,3 +228,13 @@ ast = parser.parse()
 context = {'A': False, 'B': True, 'C': True}
 print(ast.evaluate(context))
 print(parser.variables)
+
+class GenerateContext:
+    def __init__(self, variables):
+        self.variables = variables
+
+    # first, generate the first set for 2 variables
+    # if there are 3 variables, double 2 variables, but on second time set third variable context to 1s
+    # if there are 4 variables, double 3 variables, but on second time set fourth variable context to 1s
+    # repeat for increasing number of variables
+    # might want to use itertools.product here?
