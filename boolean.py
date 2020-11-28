@@ -1,4 +1,4 @@
-from prettytable import PrettyTable
+#from prettytable import PrettyTable
 import itertools
 
 # ====================== 
@@ -149,7 +149,7 @@ class Parser:
         return ret
 
     # If next pos is open bracket then parse parenthesis
-    # If next pos is not then check if not
+    # If next pos is not then parse not
     # If next pos is literal then set true or false
     # If next pos is variable then parse variable symbol
     def parse_symbol(self):
@@ -205,9 +205,6 @@ class Parser:
         ret = LiteralSymbol(literal)
         return ret
 
-
-parser = Parser(text="!(((A+B).C).0)")
-ast = parser.parse()
 # generate the context variables from parser.variables.
 # e.g. 
 # a | b
@@ -215,6 +212,16 @@ ast = parser.parse()
 # 0 | 1
 # 1 | 0
 # 1 | 1
+# parser = Parser(text="!((a+b).0)")
+# ast = parser.parse()
+# context = {'a': False, 'b': False}
+# print(ast.evaluate(context))
+# context = {'a': False, 'b': True}
+# print(ast.evaluate(context))
+# context = {'a': True, 'b': False}
+# print(ast.evaluate(context))
+# context = {'a': True, 'b': True}
+# print(ast.evaluate(context))
 # or
 # e | x | i
 # 0 | 0 | 0
@@ -225,16 +232,32 @@ ast = parser.parse()
 # 0 | 1 | 1
 # 1 | 0 | 1
 # 1 | 1 | 1
-context = {'A': False, 'B': True, 'C': True}
-print(ast.evaluate(context))
-print(parser.variables)
-
 class GenerateContext:
-    def __init__(self, variables):
-        self.variables = variables
+    def __init__(self, varnames):
+        self.varnames = varnames
+        self.n = len(self.varnames)
+        # Generate the list of combinations (each row is a tuple)
+        self.combinations = list(itertools.product([False, True], repeat=self.n))
 
-    # first, generate the first set for 2 variables
-    # if there are 3 variables, double 2 variables, but on second time set third variable context to 1s
-    # if there are 4 variables, double 3 variables, but on second time set fourth variable context to 1s
-    # repeat for increasing number of variables
-    # might want to use itertools.product here?
+    def evaluate_ast_row(self):
+        # Loop through tuples of combinations
+        for tuples in self.combinations:
+            context = {}
+            # Loop through elements of tuples
+            for elements in tuples:
+                # Get the variables from self.varnames set
+                for variable in self.varnames:
+                    context[variable] = elements
+
+            # Run the parser on current dictionary of variables
+            print(ast.evaluate(context))
+            print(context)
+        print(self.combinations)
+
+parser = Parser(text="A.B")
+ast = parser.parse()
+#context = {'A': 0, 'B': 1, 'C': 1}
+#print(ast.evaluate(context))
+#print(parser.variables)
+context = GenerateContext(parser.variables)
+context.evaluate_ast_row()
