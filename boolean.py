@@ -79,9 +79,10 @@ class LiteralSymbol:
 # Parses each section of the expression into a usable state
 class Parser:
     def __init__(self, text):
-        self.text = text.replace(' ', '') # Removes whitespace
+        self.text = text
         self.pos = 0
-        self.variables = set() # Tracks all the variables in the expression
+        self.variableSet = set() # Tracks all the variables in the expression
+        self.variables = []
         self.NOT_ALTERNATIVES = [
             '!', 'not', '¬', '-'
         ]
@@ -92,8 +93,14 @@ class Parser:
             '.', 'and', '^', '&'
         ]
 
+    def order_variable_set(self):
+        return sorted(self.variableSet)
+
     # Reads the tokens of the expression by iterating through the position
     def consume_token(self):
+        # Skips over whitespace
+        while self.pos < len(self.text) and self.text[self.pos] == ' ':
+            self.pos += 1
         # If end of string
         if self.pos >= len(self.text):
             return None # None = special token
@@ -122,6 +129,7 @@ class Parser:
         ret = self.parse_or()
         if self.consume_token() is not None:
             raise Exception('Parse error')
+        self.variables = self.order_variable_set()
         return ret
 
     # Returns the or of expression
@@ -190,7 +198,7 @@ class Parser:
         name = self.consume_token()
         if not name.isalpha():
             raise Exception('Variable not detected')
-        self.variables.add(name)
+        self.variableSet.add(name)
         return VariableSymbol(name)
 
     # Returns if literal is true or false
@@ -212,16 +220,6 @@ class Parser:
 # 0 | 1
 # 1 | 0
 # 1 | 1
-# parser = Parser(text="!((a+b).0)")
-# ast = parser.parse()
-# context = {'a': False, 'b': False}
-# print(ast.evaluate(context))
-# context = {'a': False, 'b': True}
-# print(ast.evaluate(context))
-# context = {'a': True, 'b': False}
-# print(ast.evaluate(context))
-# context = {'a': True, 'b': True}
-# print(ast.evaluate(context))
 # or
 # e | x | i
 # 0 | 0 | 0
@@ -233,31 +231,84 @@ class Parser:
 # 1 | 0 | 1
 # 1 | 1 | 1
 class GenerateContext:
-    def __init__(self, varnames):
-        self.varnames = varnames
-        self.n = len(self.varnames)
+    def __init__(self, variables):
+        self.variables = variables
+        self.n = len(self.variables)
         # Generate the list of combinations (each row is a tuple)
-        self.combinations = list(itertools.product([False, True], repeat=self.n))
+        self.combinations = list(itertools.product([0, 1], repeat=self.n))
 
     def evaluate_ast_row(self):
+        contextRow = {}
+        context = []
         # Loop through tuples of combinations
         for tuples in self.combinations:
-            context = {}
             # Loop through elements of tuples
-            for elements in tuples:
-                # Get the variables from self.varnames set
-                for variable in self.varnames:
-                    context[variable] = elements
+            contextRow = (dict(zip(self.variables, tuples)))
+            # Add the dictionary (row) to the list of dicts (rows)
+            context.append(contextRow)
+        return context
 
+    def generate_truths(self):
+        context = self.evaluate_ast_row()
+        outputRow = []
+        # Loop through the list of dictionaries
+        for row in context:
             # Run the parser on current dictionary of variables
-            print(ast.evaluate(context))
-            print(context)
-        print(self.combinations)
+            outputRow.append(dict(ast.evaluate(context[row])))
+        return outputRow
 
-parser = Parser(text="A.B")
+
+class QM:
+    def __init__(self, context, outputRow):
+        self.context = context
+        self.outputRow = outputRow
+        self.minterms = []
+
+    def generate_min_terms(self):
+        # Loop through list of dictionaries
+        for row in self.context:
+            # Turn the corresponding context row into decimal
+            self.minterms.append(int(self.context[row]))
+        print(self.minterms)
+        
+    def group_terms(self):
+        groups = [[[]]]
+        numOfGroupSets = 3 # Some temporary arbitrary number for now
+        # Loop through table rows
+        for row in self.context:
+            # If current output row is false
+            if self.outputRow[row] == 0:
+                # Remove that row from context, outputRow and minterms lists
+                self.outputRow[row].Remove(row)
+                self.context[row].Remove(row)
+                self.minterms[row].Remove(row)
+            
+            # Get the number of sets of groups that need to be generated - need to know how many sets of groups there will be
+            for groupSet in range(numOfGroupSets):
+                # =====================================
+                # FIRST SET OF GROUPS
+                # Get the highest number of 1s in a context row
+                # So to be able to generate the groups (2d list?)
+                for groupNumber in len(self.context[row].count(1)): #TODO: This line that generates number of groups is funky
+                    # If the context row has only (e.g. one 1s when groupNumber=0 e.g. three 1s when groupNumber=2)
+                    if self.context[row].count(1) == groupNumber:
+                        # Add corresponding minterm row to groups list
+                        # E.g. if groupNumber=0 and row=0 and context has one 1 in, add the current minterm decimal into that row
+                        groups[0][groupNumber][row].append(self.minterms[row])
+                
+                # =====================================
+                # SECOND SET OF GROUP SETS
+                # Any adjacent set which has a context row that is only one value different, add that to corresponding group
+                # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together, in one ROW
+                for groupNumber in groupSet:
+                    
+
+
+
+
+parser = Parser(text="(A and B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
-#print(ast.evaluate(context))
-#print(parser.variables)
 context = GenerateContext(parser.variables)
-context.evaluate_ast_row()
+outputRow = context.generate_truths()
+print(outputRow)
