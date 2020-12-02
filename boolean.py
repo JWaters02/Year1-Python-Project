@@ -213,23 +213,7 @@ class Parser:
         ret = LiteralSymbol(literal)
         return ret
 
-# generate the context variables from parser.variables.
-# e.g. 
-# a | b
-# 0 | 0
-# 0 | 1
-# 1 | 0
-# 1 | 1
-# or
-# e | x | i
-# 0 | 0 | 0
-# 0 | 1 | 0
-# 1 | 0 | 0
-# 1 | 1 | 0
-# 0 | 0 | 1
-# 0 | 1 | 1
-# 1 | 0 | 1
-# 1 | 1 | 1
+
 class GenerateContext:
     def __init__(self, variables):
         self.variables = variables
@@ -258,10 +242,12 @@ class GenerateContext:
 
 
 class QM:
-    def __init__(self, context, outputRow):
+    def __init__(self, context, outputRow, variables):
         self.context = context
         self.outputRow = outputRow
+        self.variables = variables
         self.minterms = []
+        self.prime_implicants = set()
 
     def generate_min_terms(self):
         for row in self.context:
@@ -269,34 +255,7 @@ class QM:
             self.minterms.append(int(self.context[row]))
         print(self.minterms)
         
-    def group_terms(self):
-        groups = [[[]]]
-        numOfGroupSets = (len(self.context[0]) + 1) # Num of group SETS is decided by number of bits + 1
-        self.remove_dont_cares()
-        
-        for row in self.context:
-            # =====================================
-            # FIRST SET OF GROUPS
-            # The group number is decided by the number of 1s in the row (want to start from 0)
-            groupNumber = (len(self.context[row].count(1)) - 1)
-            groups[0][groupNumber][row].append(self.minterms[row])
-            numberOfGroups = len(groups[0][groupNumber][row])
-
-        # Get the number of sets of groups that need to be generated
-        for groupSet in range(numOfGroupSets):
-            for row in range(groupNumber):
-                # =====================================
-                # SECOND SET OF GROUP SETS
-                # Any adjacent set which has a context row that is only one value different, add that to corresponding group
-                # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together, in one ROW
-
-                # Use itertools.product() to generate all the combinations of the adjacent groups
-                # Makes sure groups loop over to the next group if checking from last group
-                if (groupNumber - 1) < 0:
-                    adjacentTerms = self.generate_adjacent_terms(groups[groupSet][numberOfGroups - groupNumber][row], groups[groupSet][groupNumber][row])
-                else:
-                    adjacentTerms = self.generate_adjacent_terms(groups[groupSet][groupNumber - 1][row], groups[groupSet][groupNumber][row])
-
+    # Removes all minterms that have output of 0
     def remove_dont_cares(self):
         # Loop through table rows
         for row in self.context:
@@ -305,6 +264,72 @@ class QM:
                 self.outputRow[row].Remove(row)
                 self.context[row].Remove(row)
                 self.minterms[row].Remove(row)
+
+    # Flattens a list
+    def list_flatten(self, inputList):
+        flattened_elements = []
+        for i in inputList:
+            flattened_elements.extend(inputList[i])
+        return flattened_elements
+
+    # Finds out which minterms have been merged
+    # E.g. -100 is gotten by merging 1100 and 0100
+    def find_merged_minterms(self, minterm):
+        differedBit = minterm.count('-')
+        # If minterms not been merged
+        if differedBit == 0:
+            return [str(int(minterm, 2))]
+        diff = [bin(i)[2:].zfill(differedBit) for i in range(pow(2, differedBit))]
+        tempList = []
+        # Iterate through number of bits changed to '-'
+        for x in range(pow(2, differedBit)):
+            tempMinTerms = minterm[:]
+            prevTerm = -1
+            # Iterate through bin number with differed bits in empty slots
+            for y in diff[0]:
+                if prevTerm != -1:
+                    prevTerm = prevTerm + tempMinTerms[prevTerm + 1:].find('-') + 1
+                else:
+                    prevTerm = tempMinTerms[prevTerm + 1:].find('-')
+                tempMinTerms = tempMinTerms[:prevTerm] + y + tempMinTerms[prevTerm + 1:]
+            tempList.append(str(int(tempMinTerms, 2)))
+            diff.pop(0)
+        return tempList
+
+    # Finds all essential prime implicants in the prime implicants list
+    def generate_essential_prime_implicants(self, primeImplicants):
+        ret = []
+        for i in primeImplicants:
+            if len(primeImplicants[i]) == 1:
+                if primeImplicants[i][0] not in ret:
+                    ret.append(primeImplicants[i][0])
+                else:
+                    None
+        return ret
+
+    # Finds variables from minterm
+    # E.g. minterm -10- (assuming vars a, b, c, d) would be BC'
+    def generate_variables_from_minterm(self, minterm):
+        ret = []
+        for i in range(len(minterm)):
+            currentVar = self.variables[i]
+            if minterm[i] == '0':
+                ret.append(chr(currentVar) + "'")
+            elif minterm[i] == '1':
+                ret.append(chr(currentVar))
+        return ret
+
+    # Returns true or false on comparison and position of differ (if true)
+    def does_bit_differ_by_one(self, firstBinNum, secondBinNum):
+        diffPos = 0
+        count_diffs = 0
+        for i in range(len(firstBinNum)):
+            if not firstBinNum[i] == secondBinNum[i]:
+                diffPos = i
+                count_diffs += 1
+                if count_diffs > 1:
+                    return False, None
+        return True, diffPos
 
     # Groups here are 2d lists of minterms & output rows in the group
     def generate_adjacent_terms(self, group1, group2):
@@ -319,13 +344,10 @@ class QM:
                     group1[i] = self.modify_bit(group1[i], group2[i])
         return adjacentTerms
 
-    def does_bit_differ_by_one(self, firstBinNum, secondBinNum):
-        count_diffs = 0
-        for a, b in zip(firstBinNum, secondBinNum):
-            if a != b:
-                count_diffs += 1
-        if count_diffs == 1: return True
-        return False
+    def is_adjacency_valid(self, adjacentTerms, firstBinNum, secondBinNum):
+        # Check that bits only differ by one
+        if not self.does_bit_differ_by_one(firstBinNum, secondBinNum): return False
+        return True
 
     def modify_bit(self, firstBinNum, secondBinNum):
         # Get pos of difference from string
@@ -335,11 +357,78 @@ class QM:
                 pos = firstBinNum[a]
         # String slicing - only need one bin num because they end up the same
         return firstBinNum[:pos] + '-' + firstBinNum[pos + 1:]
+    
+    def group_terms(self):
+        self.minterms.sort()
+        # Num of group SETS is decided by number of bits + 1 
+        numGroups = len(bin(self.minterms[-1])) - 2 #TODO: Could improve this initialisation?
+        groups = {}
 
-    def is_adjacency_valid(self, adjacentTerms, firstBinNum, secondBinNum):
-        # Check that bits only differ by one
-        if not self.does_bit_differ_by_one(firstBinNum, secondBinNum): return False
-        return True
+        # FIRST SET OF GROUPS
+        # The group number is decided by the number of 1s in the row (want to start from 0)
+        for term in self.minterms:
+            try:
+                # If group exists
+                groups[bin(term).count('1')].count.append(bin(term)[2:].zfill(numGroups))
+            except KeyError:
+                # If group does not already exist
+                groups[bin(term).count('1')] = (bin(term)[2:].zfill(numGroups))
+
+        # SECOND SET OF GROUP SETS
+        # Any adjacent set which has a context row that is only one value different, add that to corresponding group
+        # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together
+        # And finds prime implicants
+        while True:
+            firstSetGroups = groups.copy()
+            breakLoop = True
+            changedMinterms = set()
+            groupNum = 0
+            secondSetGroupsSets = {}
+            groupElements = sorted(list(firstSetGroups.keys()))
+            for x in range(len(groupElements) - 1):
+                # Iterates current group elements
+                for y in firstSetGroups[groupElements[x]]:
+                    # Iterates next group elements
+                    for z in firstSetGroups[groupElements[x + 1]]:
+                        bit_differ = self.does_bit_differ_by_one(y, z)
+                        # If minterms differ by one bit
+                        if bit_differ[0]:
+                            try:
+                                # If group set already exists
+                                if y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:] not in secondSetGroupsSets[groupNum]:
+                                    # Replace the different bit in diff pos with a '-'
+                                    secondSetGroupsSets[groupNum].append(y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:])
+                                else:
+                                    None
+                            except KeyError:
+                                # If group set does not exist, create the group set
+                                secondSetGroupsSets[groupNum] = [y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:]]
+                            breakLoop = False
+                            changedMinterms.add(y)
+                            changedMinterms.add(z)
+                groupNum += 1
+
+            # Stores all the unchanged minterms
+            unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
+            # Add any minterms that can't go further, to prime implicants set
+            self.prime_implicants = self.prime_implicants.union(unchangedMinterms)
+            if breakLoop:
+                break
+            
+            primeImplicantsList = {}
+            for i in self.prime_implicants:
+                for j in self.minterms:
+                    try:
+                        # Add prime implicants to list
+                        if i not in primeImplicantsList[j]:
+                            primeImplicantsList[j].append(i)
+                        else:
+                            None
+                    except KeyError:
+                        primeImplicantsList[j] = [i]
+
+            essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
+            print(essentialPrimeImplicants)
 
 
 parser = Parser(text="(A and B)+C")
