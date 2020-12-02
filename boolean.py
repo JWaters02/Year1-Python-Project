@@ -293,18 +293,9 @@ class QM:
                 # Use itertools.product() to generate all the combinations of the adjacent groups
                 # Makes sure groups loop over to the next group if checking from last group
                 if (groupNumber - 1) < 0:
-                    adjacentTerms = list(itertools.product(groups[groupSet][numberOfGroups - groupNumber][row], groups[groupSet][groupNumber][row]))
+                    adjacentTerms = self.generate_adjacent_terms(groups[groupSet][numberOfGroups - groupNumber][row], groups[groupSet][groupNumber][row])
                 else:
-                    adjacentTerms = list(itertools.product(groups[groupSet][groupNumber - 1][row], groups[groupSet][groupNumber][row]))
-                    
-                for i in adjacentTerms:
-                    # If current term is only one off, binary-wise, to the next term
-                    # Replace that bit with a '-'
-                    if (adjacentTerms - 1) < 0:
-                        if self.does_bit_differ_by_one(self.context[i], self.context[i + 1]):
-                            #TODO: Need to set both the minterms of new groupset, groupnumber row AND new bin number of row
-                            groups[groupSet][groupNumber][row] = str(self.minterms[groupNumber], self.minterms[groupNumber])
-                    
+                    adjacentTerms = self.generate_adjacent_terms(groups[groupSet][groupNumber - 1][row], groups[groupSet][groupNumber][row])
 
     def remove_dont_cares(self):
         # Loop through table rows
@@ -315,29 +306,40 @@ class QM:
                 self.context[row].Remove(row)
                 self.minterms[row].Remove(row)
 
-    def does_bit_differ_by_one(self, firstByte, secondByte):
-        # Uses bitwise XOR
-        # diff = firstByte ^ secondByte
-        # return diff and (not(diff & (diff - 1)))
+    # Groups here are 2d lists of minterms & output rows in the group
+    def generate_adjacent_terms(self, group1, group2):
+        # Get adjacent terms of minterms
+        adjacentTerms = []
+        for i in len(group1):
+            adjacentTerms.append(list(itertools.product(group1[i], group2[i])))
+            for term in adjacentTerms:
+                if not self.is_adjacency_valid(adjacentTerms[term], group1[i], group2[i]):
+                    adjacentTerms[term].pop(term)
+                else:
+                    group1[i] = self.modify_bit(group1[i], group2[i])
+        return adjacentTerms
+
+    def does_bit_differ_by_one(self, firstBinNum, secondBinNum):
         count_diffs = 0
-        for a, b in zip(firstByte, secondByte):
+        for a, b in zip(firstBinNum, secondBinNum):
             if a != b:
                 count_diffs += 1
         if count_diffs == 1: return True
-        else: return False
+        return False
 
-    def modify_bit(self, firstByte):
-        # # Uses bitwise XOR
-        # diff = firstByte ^ secondByte
-        # # Gets pos of diff bit (right to left)
-        # pos = diff.bit_length() - 1
-        # strFByte = str(firstByte)
-        # newByte = strFByte[pos].replace(strFByte[pos], '-')
-        # return newByte
-        # String slicing
-        pos=2
-        return str(firstByte)[:pos] + '-' + str(firstByte)[pos + 1:]
+    def modify_bit(self, firstBinNum, secondBinNum):
+        # Get pos of difference from string
+        pos = 0
+        for a, b in zip(firstBinNum, secondBinNum):
+            if a != b:
+                pos = firstBinNum[a]
+        # String slicing - only need one bin num because they end up the same
+        return firstBinNum[:pos] + '-' + firstBinNum[pos + 1:]
 
+    def is_adjacency_valid(self, adjacentTerms, firstBinNum, secondBinNum):
+        # Check that bits only differ by one
+        if not self.does_bit_differ_by_one(firstBinNum, secondBinNum): return False
+        return True
 
 
 parser = Parser(text="(A and B)+C")
