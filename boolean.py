@@ -233,9 +233,9 @@ class Parser:
 class GenerateContext:
     def __init__(self, variables):
         self.variables = variables
-        self.n = len(self.variables)
+        self.numVars = len(self.variables)
         # Generate the list of combinations (each row is a tuple)
-        self.combinations = list(itertools.product([0, 1], repeat=self.n))
+        self.combinations = list(itertools.product([0, 1], repeat=self.numVars))
 
     def evaluate_ast_row(self):
         contextRow = {}
@@ -251,7 +251,6 @@ class GenerateContext:
     def generate_truths(self):
         context = self.evaluate_ast_row()
         outputRow = []
-        # Loop through the list of dictionaries
         for row in context:
             # Run the parser on current dictionary of variables
             outputRow.append(dict(ast.evaluate(context[row])))
@@ -265,7 +264,6 @@ class QM:
         self.minterms = []
 
     def generate_min_terms(self):
-        # Loop through list of dictionaries
         for row in self.context:
             # Turn the corresponding context row into decimal
             self.minterms.append(int(self.context[row]))
@@ -273,36 +271,72 @@ class QM:
         
     def group_terms(self):
         groups = [[[]]]
-        numOfGroupSets = 3 # Some temporary arbitrary number for now
+        numOfGroupSets = (len(self.context[0]) + 1) # Num of group SETS is decided by number of bits + 1
+        self.remove_dont_cares()
+        
+        for row in self.context:
+            # =====================================
+            # FIRST SET OF GROUPS
+            # The group number is decided by the number of 1s in the row (want to start from 0)
+            groupNumber = (len(self.context[row].count(1)) - 1)
+            groups[0][groupNumber][row].append(self.minterms[row])
+            numberOfGroups = len(groups[0][groupNumber][row])
+
+        # Get the number of sets of groups that need to be generated
+        for groupSet in range(numOfGroupSets):
+            for row in range(groupNumber):
+                # =====================================
+                # SECOND SET OF GROUP SETS
+                # Any adjacent set which has a context row that is only one value different, add that to corresponding group
+                # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together, in one ROW
+
+                # Use itertools.product() to generate all the combinations of the adjacent groups
+                # Makes sure groups loop over to the next group if checking from last group
+                if (groupNumber - 1) < 0:
+                    adjacentTerms = list(itertools.product(groups[groupSet][numberOfGroups - groupNumber][row], groups[groupSet][groupNumber][row]))
+                else:
+                    adjacentTerms = list(itertools.product(groups[groupSet][groupNumber - 1][row], groups[groupSet][groupNumber][row]))
+                    
+                for i in adjacentTerms:
+                    # If current term is only one off, binary-wise, to the next term
+                    # Replace that bit with a '-'
+                    if (adjacentTerms - 1) < 0:
+                        if self.does_bit_differ_by_one(self.context[i], self.context[i + 1]):
+                            #TODO: Need to set both the minterms of new groupset, groupnumber row AND new bin number of row
+                            groups[groupSet][groupNumber][row] = str(self.minterms[groupNumber], self.minterms[groupNumber])
+                    
+
+    def remove_dont_cares(self):
         # Loop through table rows
         for row in self.context:
-            # If current output row is false
             if self.outputRow[row] == 0:
                 # Remove that row from context, outputRow and minterms lists
                 self.outputRow[row].Remove(row)
                 self.context[row].Remove(row)
                 self.minterms[row].Remove(row)
-            
-            # Get the number of sets of groups that need to be generated - need to know how many sets of groups there will be
-            for groupSet in range(numOfGroupSets):
-                # =====================================
-                # FIRST SET OF GROUPS
-                # Get the highest number of 1s in a context row
-                # So to be able to generate the groups (2d list?)
-                for groupNumber in len(self.context[row].count(1)): #TODO: This line that generates number of groups is funky
-                    # If the context row has only (e.g. one 1s when groupNumber=0 e.g. three 1s when groupNumber=2)
-                    if self.context[row].count(1) == groupNumber:
-                        # Add corresponding minterm row to groups list
-                        # E.g. if groupNumber=0 and row=0 and context has one 1 in, add the current minterm decimal into that row
-                        groups[0][groupNumber][row].append(self.minterms[row])
-                
-                # =====================================
-                # SECOND SET OF GROUP SETS
-                # Any adjacent set which has a context row that is only one value different, add that to corresponding group
-                # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together, in one ROW
-                for groupNumber in groupSet:
-                    
 
+    def does_bit_differ_by_one(self, firstByte, secondByte):
+        # Uses bitwise XOR
+        # diff = firstByte ^ secondByte
+        # return diff and (not(diff & (diff - 1)))
+        count_diffs = 0
+        for a, b in zip(firstByte, secondByte):
+            if a != b:
+                count_diffs += 1
+        if count_diffs == 1: return True
+        else: return False
+
+    def modify_bit(self, firstByte):
+        # # Uses bitwise XOR
+        # diff = firstByte ^ secondByte
+        # # Gets pos of diff bit (right to left)
+        # pos = diff.bit_length() - 1
+        # strFByte = str(firstByte)
+        # newByte = strFByte[pos].replace(strFByte[pos], '-')
+        # return newByte
+        # String slicing
+        pos=2
+        return str(firstByte)[:pos] + '-' + str(firstByte)[pos + 1:]
 
 
 
@@ -310,5 +344,5 @@ parser = Parser(text="(A and B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
 context = GenerateContext(parser.variables)
-outputRow = context.generate_truths()
-print(outputRow)
+outputRows = context.generate_truths()
+print(outputRows)
