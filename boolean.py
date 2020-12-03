@@ -237,7 +237,7 @@ class GenerateContext:
         outputRow = []
         for row in context:
             # Run the parser on current dictionary of variables
-            outputRow.append(dict(ast.evaluate(context[row])))
+            outputRow.append(ast.evaluate(row))
         return outputRow
 
 
@@ -249,10 +249,14 @@ class QM:
         self.minterms = []
         self.prime_implicants = set()
 
+    # Generates binary minterms from context
     def generate_min_terms(self):
         for row in self.context:
             # Turn the corresponding context row into decimal
-            self.minterms.append(int(self.context[row]))
+            minterm = ''
+            for element in row:
+                minterm += str(row.get(element))
+            self.minterms.append(int(minterm, 2))
         print(self.minterms)
         
     # Removes all minterms that have output of 0
@@ -324,7 +328,7 @@ class QM:
         diffPos = 0
         count_diffs = 0
         for i in range(len(firstBinNum)):
-            if not firstBinNum[i] == secondBinNum[i]:
+            if firstBinNum[i] != secondBinNum[i]:
                 diffPos = i
                 count_diffs += 1
                 if count_diffs > 1:
@@ -332,20 +336,26 @@ class QM:
         return True, diffPos
     
     def group_terms(self):
+        self.generate_min_terms()
         self.minterms.sort()
-        # Num of group SETS is decided by number of bits + 1 
-        numGroups = len(bin(self.minterms[-1])) - 2 #TODO: Could improve this initialisation?
+        binLength = len(bin(self.minterms[-1])) - 2 # TODO: +1?
         groups = {}
 
         # FIRST SET OF GROUPS
         # The group number is decided by the number of 1s in the row (want to start from 0)
+        # Groups dict: Key is number of 1s in minterm, content is all the minterms with that number of 1s
         for term in self.minterms:
+            numOnesInMinterm = (bin(term).count('1'))
             try:
-                # If group exists
-                groups[bin(term).count('1')].count.append(bin(term)[2:].zfill(numGroups))
+                # If group exists,
+                # Append current minterm to correct group dict list (according to key)
+                groups[numOnesInMinterm].append((bin(term)[2:].zfill(binLength)))
             except KeyError:
-                # If group does not already exist
-                groups[bin(term).count('1')] = (bin(term)[2:].zfill(numGroups))
+                # If group does not already exist,
+                # Set current minterm to new group dict list (according to key)
+                groups[numOnesInMinterm] = list(bin(term)[2:].zfill(binLength))
+
+        print(groups)
 
         # SECOND SET OF GROUP SETS
         # Any adjacent set which has a context row that is only one value different, add that to corresponding group
@@ -385,28 +395,30 @@ class QM:
             unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
             # Add any minterms that can't go further, to prime implicants set
             self.prime_implicants = self.prime_implicants.union(unchangedMinterms)
+            # If the minterms can't be combined further
             if breakLoop:
                 break
-            
-            primeImplicantsList = {}
-            for i in self.prime_implicants:
-                for j in self.minterms:
-                    try:
-                        # Add prime implicants to list
-                        if i not in primeImplicantsList[j]:
-                            primeImplicantsList[j].append(i)
-                        else:
-                            None
-                    except KeyError:
-                        primeImplicantsList[j] = [i]
 
-            essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
-            print(essentialPrimeImplicants) # TODO: Further simplification using Petrick's method?
+        primeImplicantsList = {}
+        for i in self.prime_implicants:
+            for j in self.minterms:
+                try:
+                    # Add prime implicants to list
+                    if i not in primeImplicantsList[j]:
+                        primeImplicantsList[j].append(i)
+                    else:
+                        None
+                except KeyError:
+                    primeImplicantsList[j] = [i]
+
+        essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
+        print(essentialPrimeImplicants) # TODO: Further simplification using Petrick's method?
 
 
 parser = Parser(text="(A and B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
+#print(ast.evaluate(context))
 genContext = GenerateContext(parser.variables)
 outputRows = genContext.generate_truths()
 context = genContext.evaluate_ast_row()
