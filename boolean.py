@@ -217,9 +217,9 @@ class Parser:
 class GenerateContext:
     def __init__(self, variables):
         self.variables = variables
-        self.numVars = len(self.variables)
+        numVars = len(self.variables)
         # Generate the list of combinations (each row is a tuple)
-        self.combinations = list(itertools.product([0, 1], repeat=self.numVars))
+        self.combinations = list(itertools.product([0, 1], repeat=numVars))
 
     def evaluate_ast_row(self):
         contextRow = {}
@@ -330,33 +330,6 @@ class QM:
                 if count_diffs > 1:
                     return False, None
         return True, diffPos
-
-    # Groups here are 2d lists of minterms & output rows in the group
-    def generate_adjacent_terms(self, group1, group2):
-        # Get adjacent terms of minterms
-        adjacentTerms = []
-        for i in len(group1):
-            adjacentTerms.append(list(itertools.product(group1[i], group2[i])))
-            for term in adjacentTerms:
-                if not self.is_adjacency_valid(adjacentTerms[term], group1[i], group2[i]):
-                    adjacentTerms[term].pop(term)
-                else:
-                    group1[i] = self.modify_bit(group1[i], group2[i])
-        return adjacentTerms
-
-    def is_adjacency_valid(self, adjacentTerms, firstBinNum, secondBinNum):
-        # Check that bits only differ by one
-        if not self.does_bit_differ_by_one(firstBinNum, secondBinNum): return False
-        return True
-
-    def modify_bit(self, firstBinNum, secondBinNum):
-        # Get pos of difference from string
-        pos = 0
-        for a, b in zip(firstBinNum, secondBinNum):
-            if a != b:
-                pos = firstBinNum[a]
-        # String slicing - only need one bin num because they end up the same
-        return firstBinNum[:pos] + '-' + firstBinNum[pos + 1:]
     
     def group_terms(self):
         self.minterms.sort()
@@ -428,12 +401,15 @@ class QM:
                         primeImplicantsList[j] = [i]
 
             essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
-            print(essentialPrimeImplicants)
+            print(essentialPrimeImplicants) # TODO: Further simplification using Petrick's method?
 
 
 parser = Parser(text="(A and B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
-context = GenerateContext(parser.variables)
-outputRows = context.generate_truths()
+genContext = GenerateContext(parser.variables)
+outputRows = genContext.generate_truths()
+context = genContext.evaluate_ast_row()
 print(outputRows)
+mcclusky = QM(context, outputRows, parser.variables)
+mcclusky.group_terms()
