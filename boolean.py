@@ -338,7 +338,8 @@ class QM:
     def group_terms(self):
         self.generate_min_terms()
         self.minterms.sort()
-        binLength = len(bin(self.minterms[-1])) - 2 # TODO: +1?
+        binLength = len(bin(self.minterms[-1])) - 2
+        print(binLength)
         groups = {}
 
         # FIRST SET OF GROUPS
@@ -353,8 +354,7 @@ class QM:
             except KeyError:
                 # If group does not already exist,
                 # Set current minterm to new group dict list (according to key)
-                groups[numOnesInMinterm] = list(bin(term)[2:].zfill(binLength))
-
+                groups[numOnesInMinterm] = [(bin(term)[2:].zfill(binLength))]
         print(groups)
 
         # SECOND SET OF GROUP SETS
@@ -395,6 +395,7 @@ class QM:
             unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
             # Add any minterms that can't go further, to prime implicants set
             self.prime_implicants = self.prime_implicants.union(unchangedMinterms)
+            print("Unmarked elements: ", None if len(unchangedMinterms) == 0 else ', '.join(unchangedMinterms))
             # If the minterms can't be combined further
             if breakLoop:
                 break
@@ -415,7 +416,7 @@ class QM:
         print(essentialPrimeImplicants) # TODO: Further simplification using Petrick's method?
 
 
-parser = Parser(text="(A and B)+C")
+parser = Parser(text="(A . B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
 #print(ast.evaluate(context))
