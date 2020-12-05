@@ -248,6 +248,7 @@ class QM:
         self.variables = variables
         self.minterms = []
         self.prime_implicants = set()
+        self.function = []
 
     # Generates binary minterms from context
     def generate_min_terms(self):
@@ -257,17 +258,26 @@ class QM:
             for element in row:
                 minterm += str(row.get(element))
             self.minterms.append(int(minterm, 2))
-        print(self.minterms)
         
     # Removes all minterms that have output of 0
     def remove_dont_cares(self):
         # Loop through table rows
-        for row in self.context:
-            if self.outputRow[row] == 0:
-                # Remove that row from context, outputRow and minterms lists
-                self.outputRow[row].Remove(row)
-                self.context[row].Remove(row)
-                self.minterms[row].Remove(row)
+        # for row in self.context:
+        #     for element in row.values():
+        #         if self.outputRow[element] == False:
+        #             # Remove that row from context, outputRow and minterms lists
+        #             self.outputRow.pop(element)
+        #             self.minterms.pop(element)
+        posFlags = []
+        temp = []
+        for pos, row in enumerate(self.outputRow):
+            if self.outputRow[row]:
+                posFlags.append(pos)
+                temp.append(self.outputRow[row])
+        self.outputRow = temp.copy()
+        for pos in posFlags:
+            self.minterms.remove(pos)
+        print(self.outputRow)
 
     # Flattens a list
     def list_flatten(self, inputList):
@@ -333,13 +343,40 @@ class QM:
                 count_diffs += 1
                 if count_diffs > 1:
                     return False, None
+        if count_diffs == 0:
+            return False, None
         return True, diffPos
-    
+
+    # Multiplies 2 minterms
+    def multiply_minterms(self, exp1, exp2):
+        ret = []
+        for x in exp1:
+            # Checks with the ' in the place
+            if x + "'" in exp2 or (len(x) == 2 and x[0] in exp2):
+                return []
+            else:
+                ret.append(x)
+        for x in exp2:
+            if x not in ret:
+                ret.append(x)
+        return ret
+
+    # Multiplies 2 expressions
+    def multiply_expressions(self, exp1, exp2):
+        ret = []
+        for x in exp1:
+            for y in exp2:
+                multExp = self.multiply_minterms(x, y)
+                ret.append(multExp) if len(multExp) != 0 else None
+        return ret
+
+    # Generates groups for all terms
     def group_terms(self):
         self.generate_min_terms()
+        self.remove_dont_cares()
         self.minterms.sort()
+        print(self.minterms)
         binLength = len(bin(self.minterms[-1])) - 2
-        print(binLength)
         groups = {}
 
         # FIRST SET OF GROUPS
@@ -355,7 +392,6 @@ class QM:
                 # If group does not already exist,
                 # Set current minterm to new group dict list (according to key)
                 groups[numOnesInMinterm] = [(bin(term)[2:].zfill(binLength))]
-        print(groups)
 
         # SECOND SET OF GROUP SETS
         # Any adjacent set which has a context row that is only one value different, add that to corresponding group
@@ -366,7 +402,7 @@ class QM:
             breakLoop = True
             changedMinterms = set()
             groupNum = 0
-            secondSetGroupsSets = {}
+            groups = {}
             groupElements = sorted(list(firstSetGroups.keys()))
             for x in range(len(groupElements) - 1):
                 # Iterates current group elements
@@ -378,14 +414,14 @@ class QM:
                         if bit_differ[0]:
                             try:
                                 # If group set already exists
-                                if y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:] not in secondSetGroupsSets[groupNum]:
+                                if y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:] not in groups[groupNum]:
                                     # Replace the different bit in diff pos with a '-'
-                                    secondSetGroupsSets[groupNum].append(y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:])
+                                    groups[groupNum].append(y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:])
                                 else:
-                                    None
+                                    pass
                             except KeyError:
                                 # If group set does not exist, create the group set
-                                secondSetGroupsSets[groupNum] = [y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:]]
+                                groups[groupNum] = [y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:]]
                             breakLoop = False
                             changedMinterms.add(y)
                             changedMinterms.add(z)
@@ -395,7 +431,7 @@ class QM:
             unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
             # Add any minterms that can't go further, to prime implicants set
             self.prime_implicants = self.prime_implicants.union(unchangedMinterms)
-            print("Unmarked elements: ", None if len(unchangedMinterms) == 0 else ', '.join(unchangedMinterms))
+
             # If the minterms can't be combined further
             if breakLoop:
                 break
@@ -412,11 +448,40 @@ class QM:
                 except KeyError:
                     primeImplicantsList[j] = [i]
 
+        # Finds the essential prime implicants from prime implicants list
         essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
-        print(essentialPrimeImplicants) # TODO: Further simplification using Petrick's method?
+        print(essentialPrimeImplicants)
+        # Removes all the essential prime implicants from primeimplicants list
+        for x in essentialPrimeImplicants:
+            for y in self.find_merged_minterms(x):
+                try:
+                    del primeImplicantsList[y]
+                except KeyError:
+                    pass
+        
+        # If no minterms are left after removing all the essential prime implicants
+        if(len(primeImplicantsList) == 0):
+            # Set the function
+            self.function = [self.find_merged_minterms for i in essentialPrimeImplicants]
+            print('Solution: F')
+        # If there are left, use Petrick's method to simplify further
+        else:
+            petrick = [[self.find_merged_minterms(x) for x in primeImplicantsList[y]] for y in primeImplicantsList]
+            # Multiplies terms until sum of products of term is reached
+            while len(petrick) > 1:
+                petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
+                petrick.pop(0)
+            # Chooses the term with the least variables
+            self.function = [min(petrick[0], key = len)]
+            # Adds the essential prime implicants to final function
+            self.function.extend(self.find_merged_minterms(i) for i in essentialPrimeImplicants)
+            
+        print('Solution: F = ' + ' + '.join(''.join(i) for i in self.function))
 
 
-parser = Parser(text="(A . B)+C")
+
+
+parser = Parser(text="(A.B)+C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
 #print(ast.evaluate(context))
