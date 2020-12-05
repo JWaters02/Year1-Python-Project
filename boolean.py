@@ -262,22 +262,19 @@ class QM:
     # Removes all minterms that have output of 0
     def remove_dont_cares(self):
         # Loop through table rows
-        # for row in self.context:
-        #     for element in row.values():
-        #         if self.outputRow[element] == False:
-        #             # Remove that row from context, outputRow and minterms lists
-        #             self.outputRow.pop(element)
-        #             self.minterms.pop(element)
         posFlags = []
         temp = []
+        i = 0
         for pos, row in enumerate(self.outputRow):
             if self.outputRow[row]:
-                posFlags.append(pos)
                 temp.append(self.outputRow[row])
+            elif not self.outputRow[row]:
+                posFlags.append(pos)
         self.outputRow = temp.copy()
+        
         for pos in posFlags:
-            self.minterms.remove(pos)
-        print(self.outputRow)
+            self.minterms.pop(pos - i)
+            i += 1
 
     # Flattens a list
     def list_flatten(self, inputList):
@@ -328,9 +325,11 @@ class QM:
         for i in range(len(minterm)):
             currentVar = self.variables[i]
             if minterm[i] == '0':
-                ret.append(chr(currentVar) + "'")
+                charInt = ord(currentVar)
+                ret.append(chr(charInt) + "'")
             elif minterm[i] == '1':
-                ret.append(chr(currentVar))
+                charInt = ord(currentVar)
+                ret.append(chr(charInt))
         return ret
 
     # Returns true or false on comparison and position of differ (if true)
@@ -438,13 +437,14 @@ class QM:
 
         primeImplicantsList = {}
         for i in self.prime_implicants:
-            for j in self.minterms:
+            merged_minterms = self.find_merged_minterms(i)
+            for j in merged_minterms:
                 try:
                     # Add prime implicants to list
                     if i not in primeImplicantsList[j]:
                         primeImplicantsList[j].append(i)
                     else:
-                        None
+                        pass
                 except KeyError:
                     primeImplicantsList[j] = [i]
 
@@ -462,11 +462,10 @@ class QM:
         # If no minterms are left after removing all the essential prime implicants
         if(len(primeImplicantsList) == 0):
             # Set the function
-            self.function = [self.find_merged_minterms for i in essentialPrimeImplicants]
-            print('Solution: F')
+            self.function = [self.generate_variables_from_minterm(i) for i in essentialPrimeImplicants]
         # If there are left, use Petrick's method to simplify further
         else:
-            petrick = [[self.find_merged_minterms(x) for x in primeImplicantsList[y]] for y in primeImplicantsList]
+            petrick = [[self.generate_variables_from_minterm(x) for x in primeImplicantsList[y]] for y in primeImplicantsList]
             # Multiplies terms until sum of products of term is reached
             while len(petrick) > 1:
                 petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
@@ -474,14 +473,14 @@ class QM:
             # Chooses the term with the least variables
             self.function = [min(petrick[0], key = len)]
             # Adds the essential prime implicants to final function
-            self.function.extend(self.find_merged_minterms(i) for i in essentialPrimeImplicants)
+            self.function.extend(self.generate_variables_from_minterm(i) for i in essentialPrimeImplicants)
             
         print('Solution: F = ' + ' + '.join(''.join(i) for i in self.function))
 
 
 
 
-parser = Parser(text="(A.B)+C")
+parser = Parser(text="(A+B).C")
 ast = parser.parse()
 #context = {'A': 0, 'B': 1, 'C': 1}
 #print(ast.evaluate(context))
