@@ -1,5 +1,5 @@
-#from prettytable import PrettyTable
 import itertools
+import time
 
 # ====================== 
 # Backus-Naur Form
@@ -14,7 +14,6 @@ import itertools
 #<literal> ::= "0" | "1"
 
 # ====================== 
-
 
 # Evalutates not symbols
 class NotExpression:
@@ -214,6 +213,7 @@ class Parser:
         return ret
 
 
+# Generates all the combinations of the truth table based on the variables given
 class GenerateContext:
     def __init__(self, variables):
         self.variables = variables
@@ -241,6 +241,7 @@ class GenerateContext:
         return outputRow
 
 
+# Runs the Quine-McClusky algorithm and further simplifies using Petrick's method
 class QM:
     def __init__(self, context, outputRow, variables):
         self.context = context
@@ -266,9 +267,9 @@ class QM:
         temp = []
         i = 0
         for pos, row in enumerate(self.outputRow):
-            if self.outputRow[row]:
+            if not row:
                 temp.append(self.outputRow[row])
-            elif not self.outputRow[row]:
+            else:
                 posFlags.append(pos)
         self.outputRow = temp.copy()
         
@@ -306,6 +307,23 @@ class QM:
             tempList.append(str(int(tempMinTerms, 2)))
             diff.pop(0)
         return tempList
+
+    # Creates the prime implicants list from the minterms which have been merged
+    def generate_prime_implicants(self):
+        primeImplicantsList = {}
+        for i in self.prime_implicants:
+            # List of minterms that have been merged
+            merged_minterms = self.find_merged_minterms(i)
+            for j in merged_minterms:
+                try:
+                    # Add prime implicants to list
+                    if i not in primeImplicantsList[j]:
+                        primeImplicantsList[j].append(i)
+                    else:
+                        pass
+                except KeyError:
+                    primeImplicantsList[j] = [i]
+        return primeImplicantsList
 
     # Finds all essential prime implicants in the prime implicants list
     def generate_essential_prime_implicants(self, primeImplicants):
@@ -374,7 +392,6 @@ class QM:
         self.generate_min_terms()
         self.remove_dont_cares()
         self.minterms.sort()
-        print(self.minterms)
         binLength = len(bin(self.minterms[-1])) - 2
         groups = {}
 
@@ -405,6 +422,7 @@ class QM:
             groupElements = sorted(list(firstSetGroups.keys()))
             for x in range(len(groupElements) - 1):
                 # Iterates current group elements
+                timeexecstart = time.time()
                 for y in firstSetGroups[groupElements[x]]:
                     # Iterates next group elements
                     for z in firstSetGroups[groupElements[x + 1]]:
@@ -425,6 +443,8 @@ class QM:
                             changedMinterms.add(y)
                             changedMinterms.add(z)
                 groupNum += 1
+                timeexecend = time.time()
+                print(f"Executiont time: {timeexecend - timeexecstart}")
 
             # Stores all the unchanged minterms
             unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
@@ -435,22 +455,23 @@ class QM:
             if breakLoop:
                 break
 
-        primeImplicantsList = {}
-        for i in self.prime_implicants:
-            merged_minterms = self.find_merged_minterms(i)
-            for j in merged_minterms:
-                try:
-                    # Add prime implicants to list
-                    if i not in primeImplicantsList[j]:
-                        primeImplicantsList[j].append(i)
-                    else:
-                        pass
-                except KeyError:
-                    primeImplicantsList[j] = [i]
+    # Petrick's method determines all the minimum SOP (sum of product) solutions from the prime implicants list
+    def petricks_method(self, _primeImplicantsList, _essentialPrimeImplicants):
+        petrick = [[self.generate_variables_from_minterm(x) for x in _primeImplicantsList[y]] for y in _primeImplicantsList]
+        # Multiplies terms until sum of products of term is reached
+        while len(petrick) > 1:
+            petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
+            petrick.pop(0)
+        # Chooses the term with the least variables
+        self.function = [min(petrick[0], key = len)]
+        # Adds the essential prime implicants to final function
+        self.function.extend(self.generate_variables_from_minterm(i) for i in _essentialPrimeImplicants)
 
+    def generate_solution(self):
+        self.group_terms()
+        primeImplicantsList = self.generate_prime_implicants()
         # Finds the essential prime implicants from prime implicants list
         essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
-        print(essentialPrimeImplicants)
         # Removes all the essential prime implicants from primeimplicants list
         for x in essentialPrimeImplicants:
             for y in self.find_merged_minterms(x):
@@ -465,28 +486,19 @@ class QM:
             self.function = [self.generate_variables_from_minterm(i) for i in essentialPrimeImplicants]
         # If there are left, use Petrick's method to simplify further
         else:
-            petrick = [[self.generate_variables_from_minterm(x) for x in primeImplicantsList[y]] for y in primeImplicantsList]
-            # Multiplies terms until sum of products of term is reached
-            while len(petrick) > 1:
-                petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
-                petrick.pop(0)
-            # Chooses the term with the least variables
-            self.function = [min(petrick[0], key = len)]
-            # Adds the essential prime implicants to final function
-            self.function.extend(self.generate_variables_from_minterm(i) for i in essentialPrimeImplicants)
-            
+            self.petricks_method(primeImplicantsList, essentialPrimeImplicants)
         print('Solution: F = ' + ' + '.join(''.join(i) for i in self.function))
 
 
-
-
-parser = Parser(text="(A+B).C")
+print("Boolean expression simplifier. Input your expression below. Supported tokens are:\n'!', 'not', '¬', '-',\n'+', 'or', '|', 'v',\n'.', 'and', '^', '&'")
+expression = input()
+start = time.time()
+parser = Parser(expression)
 ast = parser.parse()
-#context = {'A': 0, 'B': 1, 'C': 1}
-#print(ast.evaluate(context))
 genContext = GenerateContext(parser.variables)
 outputRows = genContext.generate_truths()
 context = genContext.evaluate_ast_row()
-print(outputRows)
 mcclusky = QM(context, outputRows, parser.variables)
-mcclusky.group_terms()
+mcclusky.generate_solution()
+end = time.time()
+print(f"Executiont time: {end - start}")
