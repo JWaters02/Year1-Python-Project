@@ -1,27 +1,29 @@
 import itertools
 import time
 
-# ====================== 
+
+# ======================
 # Backus-Naur Form
 
-#<expression> ::= <term> ( <or_symbol> <term> )...
-#<or_symbol> ::= "+" | "or"
-#<term> ::= <symbol> ( ("." | "and") <symbol> )...
-#<symbol> ::= <not_symbol> | <parenthesized_symbol> | <variable> | <literal>
-#<not_symbol> ::= "!" <symbol>
-#<parenthesized_symbol> ::= "(" <expression> ")"
-#<variable> ::= a letter
-#<literal> ::= "0" | "1"
+# <expression> ::= <term> ( <or_symbol> <term> )...
+# <or_symbol> ::= "+" | "or"
+# <term> ::= <symbol> ( ("." | "and") <symbol> )...
+# <symbol> ::= <not_symbol> | <parenthesized_symbol> | <variable> | <literal>
+# <not_symbol> ::= "!" <symbol>
+# <parenthesized_symbol> ::= "(" <expression> ")"
+# <variable> ::= a letter
+# <literal> ::= "0" | "1"
 
 # ====================== 
 
-# Evalutates not symbols
+
+# Evaluates not symbols
 class NotExpression:
     def __init__(self, sub_symbol):
         self.sub_symbol = sub_symbol
 
-    def evaluate(self, context):
-        return not self.sub_symbol.evaluate(context)
+    def evaluate(self, _context):
+        return not self.sub_symbol.evaluate(_context)
 
 
 # Evaluates and terms
@@ -29,9 +31,9 @@ class AndExpression:
     def __init__(self, and_list):
         self.and_list = and_list
 
-    def evaluate(self, context):
+    def evaluate(self, _context):
         for term in self.and_list:
-            if not term.evaluate(context):
+            if not term.evaluate(_context):
                 return False
         return True
 
@@ -41,9 +43,9 @@ class OrExpression:
     def __init__(self, expression_list):
         self.expression_list = expression_list
 
-    def evaluate(self, context):
+    def evaluate(self, _context):
         for expr in self.expression_list:
-            if expr.evaluate(context):
+            if expr.evaluate(_context):
                 return True
         return False
 
@@ -52,26 +54,26 @@ class OrExpression:
 class ParenthesizedSymbol:
     def __init__(self, sub_expr):
         self.sub_expr = sub_expr
-    
-    def evaluate(self, context):
-        return self.sub_expr.evaluate(context)
+
+    def evaluate(self, _context):
+        return self.sub_expr.evaluate(_context)
 
 
 # Evaluates any variables
 class VariableSymbol:
     def __init__(self, letter):
         self.letter = letter
-    
-    def evaluate(self, context):
-        return context[self.letter]
+
+    def evaluate(self, _context):
+        return _context[self.letter]
 
 
 # Evaluates any literals
 class LiteralSymbol:
     def __init__(self, literal):
         self.literal = literal
-    
-    def evaluate(self, context):
+
+    def evaluate(self, _context):
         return self.literal
 
 
@@ -80,7 +82,7 @@ class Parser:
     def __init__(self, text):
         self.text = text
         self.pos = 0
-        self.variableSet = set() # Tracks all the variables in the expression
+        self.variableSet = set()  # Tracks all the variables in the expression
         self.variables = []
         self.NOT_ALTERNATIVES = [
             '!', 'not', '¬', '-'
@@ -102,7 +104,7 @@ class Parser:
             self.pos += 1
         # If end of string
         if self.pos >= len(self.text):
-            return None # None = special token
+            return None  # None = special token
         # If the text at current position is a letter
         elif self.text[self.pos].isalpha():
             ret = ''
@@ -118,23 +120,22 @@ class Parser:
 
     # Reads the token of the expression at current position
     def peek_token(self):
-        prevPos = self.pos
+        prev_pos = self.pos
         ret = self.consume_token()
-        self.pos = prevPos
+        self.pos = prev_pos
         return ret
 
     # Parsed expression
     def parse(self):
         ret = self.parse_or()
         if self.consume_token() is not None:
-            raise Exception('Parse error')
+            raise Exception('Error: Parse error')
         self.variables = self.order_variable_set()
         return ret
 
     # Returns the or of expression
     def parse_or(self):
-        terms = []
-        terms.append(self.parse_and())
+        terms = [self.parse_and()]
         token = self.peek_token()
         while token in self.OR_ALTERNATIVES:
             token = self.consume_token()
@@ -145,8 +146,7 @@ class Parser:
 
     # Returns the and term of expression
     def parse_and(self):
-        terms = []
-        terms.append(self.parse_symbol())
+        terms = [self.parse_symbol()]
         token = self.peek_token()
         while token in self.AND_ALTERNATIVES:
             token = self.consume_token()
@@ -173,8 +173,8 @@ class Parser:
     # Returns the not of the expression
     def parse_not(self):
         token = self.consume_token()
-        if not token in self.NOT_ALTERNATIVES:
-            raise Exception('Invalid syntax')
+        if token not in self.NOT_ALTERNATIVES:
+            raise Exception('Error: Invalid syntax')
         sub_symbol = self.parse_symbol()
         ret = NotExpression(sub_symbol)
         return ret
@@ -184,19 +184,21 @@ class Parser:
     def parse_parenthesized_symbol(self):
         token = self.consume_token()
         if not token == "(":
-            raise Exception('Missing (')
+            raise Exception('Error: Missing (')
         ret = ParenthesizedSymbol(self.parse_or())
         token = self.consume_token()
         if not token == ")":
-            raise Exception('Missing )')
+            raise Exception('Error: Missing )')
         return ret
 
     # Returns any variables in the expression/term
     # Raises an error if the variable is not text
     def parse_variable_symbol(self):
         name = self.consume_token()
+        if name is None:
+            raise Exception('Error: variable not detected')
         if not name.isalpha():
-            raise Exception('Variable not detected')
+            raise Exception('Error: variable not detected')
         self.variableSet.add(name)
         return VariableSymbol(name)
 
@@ -204,7 +206,7 @@ class Parser:
     def parse_literal(self):
         token = self.consume_token()
         if not token == "1" and not token == "0":
-            raise Exception('Incorrect syntax')
+            raise Exception('Error: Incorrect syntax')
         if token == "1":
             literal = True
         else:
@@ -217,35 +219,34 @@ class Parser:
 class GenerateContext:
     def __init__(self, variables):
         self.variables = variables
-        numVars = len(self.variables)
+        num_vars = len(self.variables)
         # Generate the list of combinations (each row is a tuple)
-        self.combinations = list(itertools.product([0, 1], repeat=numVars))
+        self.combinations = list(itertools.product([0, 1], repeat=num_vars))
 
     def evaluate_ast_row(self):
-        contextRow = {}
-        context = []
+        _context = []
         # Loop through tuples of combinations
         for tuples in self.combinations:
             # Loop through elements of tuples
-            contextRow = (dict(zip(self.variables, tuples)))
+            context_row = (dict(zip(self.variables, tuples)))
             # Add the dictionary (row) to the list of dicts (rows)
-            context.append(contextRow)
-        return context
+            _context.append(context_row)
+        return _context
 
     def generate_truths(self):
-        context = self.evaluate_ast_row()
-        outputRow = []
-        for row in context:
+        _context = self.evaluate_ast_row()
+        output_row = []
+        for row in _context:
             # Run the parser on current dictionary of variables
-            outputRow.append(ast.evaluate(row))
-        return outputRow
+            output_row.append(ast.evaluate(row))
+        return output_row
 
 
 # Runs the Quine-McClusky algorithm and further simplifies using Petrick's method
 class QM:
-    def __init__(self, context, outputRow, variables):
-        self.context = context
-        self.outputRow = outputRow
+    def __init__(self, _context, _outputRow, variables):
+        self.context = _context
+        self.output_row = _outputRow
         self.variables = variables
         self.minterms = []
         self.prime_implicants = set()
@@ -259,79 +260,79 @@ class QM:
             for element in row:
                 minterm += str(row.get(element))
             self.minterms.append(int(minterm, 2))
-        
+
     # Removes all minterms that have output of 0
     def remove_dont_cares(self):
         # Loop through table rows
-        posFlags = []
+        pos_flags = []
         temp = []
         i = 0
-        for pos, row in enumerate(self.outputRow):
+        for pos, row in enumerate(self.output_row):
             if not row:
-                temp.append(self.outputRow[row])
+                temp.append(self.output_row[row])
             else:
-                posFlags.append(pos)
-        self.outputRow = temp.copy()
-        
-        for pos in posFlags:
+                pos_flags.append(pos)
+        self.output_row = temp.copy()
+
+        for pos in pos_flags:
             self.minterms.pop(pos - i)
             i += 1
 
     # Flattens a list
-    def list_flatten(self, inputList):
+    def list_flatten(self, input_list):
         flattened_elements = []
-        for i in inputList:
-            flattened_elements.extend(inputList[i])
+        for i in input_list:
+            flattened_elements.extend(input_list[i])
         return flattened_elements
 
     # Finds out which minterms have been merged
     # E.g. -100 is gotten by merging 1100 and 0100
     def find_merged_minterms(self, minterm):
-        differedBit = minterm.count('-')
+        differed_bit = minterm.count('-')
         # If minterms not been merged
-        if differedBit == 0:
+        if differed_bit == 0:
             return [str(int(minterm, 2))]
-        diff = [bin(i)[2:].zfill(differedBit) for i in range(pow(2, differedBit))]
-        tempList = []
+        diff = [bin(i)[2:].zfill(differed_bit) for i in range(pow(2, differed_bit))]
+        temp_list = []
         # Iterate through number of bits changed to '-'
-        for x in range(pow(2, differedBit)):
-            tempMinTerms = minterm[:]
-            prevTerm = -1
+        for x in range(pow(2, differed_bit)):
+            temp_min_terms = minterm[:]
+            prev_term = -1
             # Iterate through bin number with differed bits in empty slots
             for y in diff[0]:
-                if prevTerm != -1:
-                    prevTerm = prevTerm + tempMinTerms[prevTerm + 1:].find('-') + 1
+                if prev_term != -1:
+                    prev_term = prev_term + temp_min_terms[prev_term + 1:].find('-') + 1
                 else:
-                    prevTerm = tempMinTerms[prevTerm + 1:].find('-')
-                tempMinTerms = tempMinTerms[:prevTerm] + y + tempMinTerms[prevTerm + 1:]
-            tempList.append(str(int(tempMinTerms, 2)))
+                    prev_term = temp_min_terms[prev_term + 1:].find('-')
+                temp_min_terms = temp_min_terms[:prev_term] + y + temp_min_terms[prev_term + 1:]
+            temp_list.append(str(int(temp_min_terms, 2)))
             diff.pop(0)
-        return tempList
+        return temp_list
 
     # Creates the prime implicants list from the minterms which have been merged
     def generate_prime_implicants(self):
-        primeImplicantsList = {}
+        prime_implicants_list = {}
         for i in self.prime_implicants:
             # List of minterms that have been merged
             merged_minterms = self.find_merged_minterms(i)
             for j in merged_minterms:
                 try:
                     # Add prime implicants to list
-                    if i not in primeImplicantsList[j]:
-                        primeImplicantsList[j].append(i)
+                    if i not in prime_implicants_list[j]:
+                        prime_implicants_list[j].append(i)
                     else:
                         pass
                 except KeyError:
-                    primeImplicantsList[j] = [i]
-        return primeImplicantsList
+                    prime_implicants_list[j] = [i]
+        return prime_implicants_list
 
     # Finds all essential prime implicants in the prime implicants list
-    def generate_essential_prime_implicants(self, primeImplicants):
+    def generate_essential_prime_implicants(self, prime_implicants):
         ret = []
-        for i in primeImplicants:
-            if len(primeImplicants[i]) == 1:
-                if primeImplicants[i][0] not in ret:
-                    ret.append(primeImplicants[i][0])
+        for i in prime_implicants:
+            if len(prime_implicants[i]) == 1:
+                if prime_implicants[i][0] not in ret:
+                    ret.append(prime_implicants[i][0])
                 else:
                     None
         return ret
@@ -341,28 +342,26 @@ class QM:
     def generate_variables_from_minterm(self, minterm):
         ret = []
         for i in range(len(minterm)):
-            currentVar = self.variables[i]
+            current_var = self.variables[i]
             if minterm[i] == '0':
-                charInt = ord(currentVar)
-                ret.append(chr(charInt) + "'")
+                ret.append(current_var + "'")
             elif minterm[i] == '1':
-                charInt = ord(currentVar)
-                ret.append(chr(charInt))
+                ret.append(current_var)
         return ret
 
     # Returns true or false on comparison and position of differ (if true)
-    def does_bit_differ_by_one(self, firstBinNum, secondBinNum):
-        diffPos = 0
+    def does_bit_differ_by_one(self, first_bin_num, second_bin_num):
+        diff_pos = 0
         count_diffs = 0
-        for i in range(len(firstBinNum)):
-            if firstBinNum[i] != secondBinNum[i]:
-                diffPos = i
+        for i in range(len(first_bin_num)):
+            if first_bin_num[i] != second_bin_num[i]:
+                diff_pos = i
                 count_diffs += 1
                 if count_diffs > 1:
                     return False, None
         if count_diffs == 0:
             return False, None
-        return True, diffPos
+        return True, diff_pos
 
     # Multiplies 2 minterms
     def multiply_minterms(self, exp1, exp2):
@@ -383,8 +382,8 @@ class QM:
         ret = []
         for x in exp1:
             for y in exp2:
-                multExp = self.multiply_minterms(x, y)
-                ret.append(multExp) if len(multExp) != 0 else None
+                multi_exp = self.multiply_minterms(x, y)
+                ret.append(multi_exp) if len(multi_exp) != 0 else None
         return ret
 
     # Generates groups for all terms
@@ -392,113 +391,126 @@ class QM:
         self.generate_min_terms()
         self.remove_dont_cares()
         self.minterms.sort()
-        binLength = len(bin(self.minterms[-1])) - 2
+        bin_length = len(bin(self.minterms[-1])) - 2
         groups = {}
 
         # FIRST SET OF GROUPS
         # The group number is decided by the number of 1s in the row (want to start from 0)
         # Groups dict: Key is number of 1s in minterm, content is all the minterms with that number of 1s
         for term in self.minterms:
-            numOnesInMinterm = (bin(term).count('1'))
+            num_ones_in_minterm = (bin(term).count('1'))
             try:
                 # If group exists,
                 # Append current minterm to correct group dict list (according to key)
-                groups[numOnesInMinterm].append((bin(term)[2:].zfill(binLength)))
+                groups[num_ones_in_minterm].append((bin(term)[2:].zfill(bin_length)))
             except KeyError:
                 # If group does not already exist,
                 # Set current minterm to new group dict list (according to key)
-                groups[numOnesInMinterm] = [(bin(term)[2:].zfill(binLength))]
+                groups[num_ones_in_minterm] = [(bin(term)[2:].zfill(bin_length))]
 
         # SECOND SET OF GROUP SETS
         # Any adjacent set which has a context row that is only one value different, add that to corresponding group
         # E.g. min terms 2,6 are 1 off and in adjacent groups, put them in one group together
         # And finds prime implicants
         while True:
-            firstSetGroups = groups.copy()
-            breakLoop = True
-            changedMinterms = set()
-            groupNum = 0
+            first_set_groups = groups.copy()
+            break_loop = True
+            changed_minterms = set()
+            group_num = 0
             groups = {}
-            groupElements = sorted(list(firstSetGroups.keys()))
-            for x in range(len(groupElements) - 1):
+            group_elements = sorted(list(first_set_groups.keys()))
+            for x in range(len(group_elements) - 1):
                 # Iterates current group elements
-                timeexecstart = time.time()
-                for y in firstSetGroups[groupElements[x]]:
+                for y in first_set_groups[group_elements[x]]:
                     # Iterates next group elements
-                    for z in firstSetGroups[groupElements[x + 1]]:
+                    for z in first_set_groups[group_elements[x + 1]]:
                         bit_differ = self.does_bit_differ_by_one(y, z)
                         # If minterms differ by one bit
                         if bit_differ[0]:
                             try:
                                 # If group set already exists
-                                if y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:] not in groups[groupNum]:
+                                if y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:] not in groups[group_num]:
                                     # Replace the different bit in diff pos with a '-'
-                                    groups[groupNum].append(y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:])
+                                    groups[group_num].append(y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:])
                                 else:
                                     pass
                             except KeyError:
                                 # If group set does not exist, create the group set
-                                groups[groupNum] = [y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:]]
-                            breakLoop = False
-                            changedMinterms.add(y)
-                            changedMinterms.add(z)
-                groupNum += 1
-                timeexecend = time.time()
-                print(f"Executiont time: {timeexecend - timeexecstart}")
+                                groups[group_num] = [y[:bit_differ[1]] + '-' + y[bit_differ[1] + 1:]]
+                            break_loop = False
+                            changed_minterms.add(y)
+                            changed_minterms.add(z)
+                group_num += 1
 
             # Stores all the unchanged minterms
-            unchangedMinterms = set(self.list_flatten(firstSetGroups)).difference(changedMinterms)
+            unchanged_minterms = set(self.list_flatten(first_set_groups)).difference(changed_minterms)
             # Add any minterms that can't go further, to prime implicants set
-            self.prime_implicants = self.prime_implicants.union(unchangedMinterms)
+            self.prime_implicants = self.prime_implicants.union(unchanged_minterms)
 
             # If the minterms can't be combined further
-            if breakLoop:
+            if break_loop:
                 break
 
     # Petrick's method determines all the minimum SOP (sum of product) solutions from the prime implicants list
-    def petricks_method(self, _primeImplicantsList, _essentialPrimeImplicants):
-        petrick = [[self.generate_variables_from_minterm(x) for x in _primeImplicantsList[y]] for y in _primeImplicantsList]
+    def petricks_method(self, _prime_implicants_list, _essential_prime_implicants):
+        petrick = [[self.generate_variables_from_minterm(x) for x in _prime_implicants_list[y]] for y in
+                   _prime_implicants_list]
         # Multiplies terms until sum of products of term is reached
         while len(petrick) > 1:
             petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
             petrick.pop(0)
         # Chooses the term with the least variables
-        self.function = [min(petrick[0], key = len)]
+        self.function = [min(petrick[0], key=len)]
         # Adds the essential prime implicants to final function
-        self.function.extend(self.generate_variables_from_minterm(i) for i in _essentialPrimeImplicants)
+        self.function.extend(self.generate_variables_from_minterm(i) for i in _essential_prime_implicants)
 
     def generate_solution(self):
         self.group_terms()
-        primeImplicantsList = self.generate_prime_implicants()
+        prime_implicants_list = self.generate_prime_implicants()
         # Finds the essential prime implicants from prime implicants list
-        essentialPrimeImplicants = self.generate_essential_prime_implicants(primeImplicantsList)
+        essential_prime_implicants = self.generate_essential_prime_implicants(prime_implicants_list)
         # Removes all the essential prime implicants from primeimplicants list
-        for x in essentialPrimeImplicants:
+        for x in essential_prime_implicants:
             for y in self.find_merged_minterms(x):
                 try:
-                    del primeImplicantsList[y]
+                    del prime_implicants_list[y]
                 except KeyError:
                     pass
-        
+
         # If no minterms are left after removing all the essential prime implicants
-        if(len(primeImplicantsList) == 0):
+        if len(prime_implicants_list) == 0:
             # Set the function
-            self.function = [self.generate_variables_from_minterm(i) for i in essentialPrimeImplicants]
+            self.function = [self.generate_variables_from_minterm(i) for i in essential_prime_implicants]
         # If there are left, use Petrick's method to simplify further
         else:
-            self.petricks_method(primeImplicantsList, essentialPrimeImplicants)
-        print('Solution: F = ' + ' + '.join(''.join(i) for i in self.function))
+            self.petricks_method(prime_implicants_list, essential_prime_implicants)
+
+        # If there is no function
+        if not any(self.function):
+            print('There is no solution to this expression.')
+        else:
+            print('Solution: F = ' + ' + '.join(''.join(i) for i in self.function))
 
 
-print("Boolean expression simplifier. Input your expression below. Supported tokens are:\n'!', 'not', '¬', '-',\n'+', 'or', '|', 'v',\n'.', 'and', '^', '&'")
-expression = input()
-start = time.time()
-parser = Parser(expression)
-ast = parser.parse()
-genContext = GenerateContext(parser.variables)
-outputRows = genContext.generate_truths()
-context = genContext.evaluate_ast_row()
-mcclusky = QM(context, outputRows, parser.variables)
-mcclusky.generate_solution()
-end = time.time()
-print(f"Executiont time: {end - start}")
+# Loop expression inputs until the user chooses to quit
+while True:
+    print(
+        "Boolean expression simplifier. Input your expression below or type 'quit' to quit. Supported tokens "
+        "are:\n'!', 'not', '¬', '-',\n'+', 'or', '|', 'v',\n'.', 'and', '^', '&'.\nE.g. '(A and B) or C' is "
+        "equivalent to '(A.B) + C'")
+    expression = input()
+    if expression.lower() == "quit":
+        break
+    else:
+        start = time.time()
+        print("================================")
+        parser = Parser(expression)
+        ast = parser.parse()
+        genContext = GenerateContext(parser.variables)
+        outputRows = genContext.generate_truths()
+        context = genContext.evaluate_ast_row()
+        mcclusky = QM(context, outputRows, parser.variables)
+        mcclusky.generate_solution()
+        end = time.time()
+        print(f"Overall execution time: {end - start}")
+        print("================================")
