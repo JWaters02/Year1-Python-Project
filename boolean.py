@@ -453,8 +453,7 @@ class QM:
 
     # Petrick's method determines all the minimum SOP (sum of product) solutions from the prime implicants list
     def petricks_method(self, _prime_implicants_list, _essential_prime_implicants):
-        petrick = [[self.generate_variables_from_minterm(x) for x in _prime_implicants_list[y]] for y in
-                   _prime_implicants_list]
+        petrick = [[self.generate_variables_from_minterm(x) for x in _prime_implicants_list[y]] for y in _prime_implicants_list]
         # Multiplies terms until sum of products of term is reached
         while len(petrick) > 1:
             petrick[1] = self.multiply_expressions(petrick[0], petrick[1])
